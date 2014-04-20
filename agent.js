@@ -52,7 +52,7 @@ function main(){
 				// configure message provider
 				var agentMessage = require("./lib/agent-message");
 				agentMessage.init(logger, cloud, sensorsList);
-				
+
 				// register device
 				cloud.reg(sensorsList, agentMessage.registrationCompleted, token);
 	
