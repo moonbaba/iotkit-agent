@@ -58,6 +58,7 @@ utils.getDeviceId(function (id) {
                var ctrl = Control.init(conf, logger, id);
                ctrl.bind(udp);
             }
+            Listener.MQTT.init(conf, logger, agentMessage.handler, id);
             Listener.TCP.init(conf.listeners, logger, agentMessage.handler);
 
         } else {
