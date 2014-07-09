@@ -19,7 +19,7 @@
         "PATH": "/tmp/"
     },
     "gateway_id": null,
-    "default_connector": "rest",
+    "default_connector": "mqtt",
     "connector": {
         "mqtt": {
             "host": "broker.us.enableiot.com",
