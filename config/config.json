@@ -26,7 +26,7 @@
             "port": 8883,
             "qos": 1,
             "retain": false,
-            "secure": false,
+            "secure": true,
             "retries": 30,
             "topic": {
                 "device_status": "device/{deviceid}/activation",

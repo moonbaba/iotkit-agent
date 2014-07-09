@@ -67,22 +67,11 @@ exports.init = function(conf, logger, onMessage, deviceId) {
 
   var metric_topic = conf.connector.mqtt.topic.metric_topic || "server/metric/{accountid}/{gatewayid}";
 
-    var tlsArgs = { };
-    var verifyCertKeyPath = conf.connector.mqtt.key || './certs/client.key';
-    if (fs.existsSync(verifyCertKeyPath)) {
-        tlsArgs = {
-            keyPath: conf.connector.mqtt.key || './certs/client.key',
-            certPath: conf.connector.mqtt.crt || './certs/client.crt',
-            keepalive: 59000
-        };
-    } else {
-        // load from /usr/share
-        tlsArgs = {
-            keyPath: '/usr/share/iotkit-agent/certs/enableiot_agent.key',
-            certPath: '/usr/share/iotkit-agent/certs/enableiot_agent.crt',
-            keepalive: 59000
-        };
-    }
+    var credential = {
+        username: secret.accountId,
+        password: secret.deviceToken,
+        keepalive: conf.keepalive
+    };
 
   var mqttServer = mqtt.createServer(function(client) {
 
@@ -110,9 +99,9 @@ exports.init = function(conf, logger, onMessage, deviceId) {
             var topic = packet.subscriptions[0].topic;
 
             if(conf.connector.mqtt.secure){
-                newclient = mqtt.createSecureClient(conf.connector.mqtt.port, conf.connector.mqtt.host, tlsArgs);
+                newclient = mqtt.createSecureClient(conf.connector.mqtt.port, conf.connector.mqtt.host, credential);
             } else {
-                newclient = mqtt.createClient(conf.connector.mqtt.port, conf.connector.mqtt.host);
+                newclient = mqtt.createClient(conf.connector.mqtt.port, conf.connector.mqtt.host, credential);
             }
 
             if(topic === 'data'){
