@@ -104,12 +104,13 @@ exports.init = function(conf, logger, onMessage, deviceId) {
                 newclient = mqtt.createClient(conf.connector.mqtt.port, conf.connector.mqtt.host, credential);
             }
 
-            if(topic === 'data'){
+            if(topic === '' || topic === 'data'){
                 newclient.subscribe(buildPath(metric_topic, [secret.accountId, deviceId]));
                 logger.info('Subscribed to topic:' + buildPath(metric_topic, [secret.accountId, deviceId]));
             } else {
-                newclient.subscribe(buildPath(metric_topic, [secret.accountId, deviceId]) + '/' + topic);
-                logger.info('Subscribing to topic:' + buildPath(metric_topic, [secret.accountId, deviceId]) + '/' + topic);
+                // subscribe to another device under the same account
+                newclient.subscribe(buildPath(metric_topic, [secret.accountId, topic]));
+                logger.info('Subscribed to topic:' + buildPath(metric_topic, [secret.accountId, topic]));
             }
 
             newclient.on('message', function (topic, message) {
