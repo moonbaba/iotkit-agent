@@ -25,7 +25,8 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-var path = require('path'),
+var fs = require('fs'),
+    path = require('path'),
     Cloud = require("../api/cloud.proxy"),
     conf = require('../config'),
     Message = require('../lib/agent-message'),
@@ -35,8 +36,24 @@ var path = require('path'),
     common = require('../lib/common');
 
 var filename = "sensor-list.json";
+function weAreGlobal() {
+    var global = path.dirname(require.main.filename);
+    if (global.indexOf('node_modules/iotkit-agent') !== -1) {
+        return true;
+    }
+    return false;
+}
 function getStoreFileName () {
-    return path.join(__dirname, '../data/' +  filename);
+    var fullFileName = path.join(__dirname, '../data/' +  filename);
+    var systemConf = '/usr/share/iotkit-agent/data/' + filename;
+    if (weAreGlobal() && fs.existsSync(systemConf)) {
+        return systemConf;
+    } else if (fs.existsSync(fullFileName)) {
+        return fullFileName;
+    } else {
+        console.error("Failed to find file" + filename);
+        return null;
+    }
 }
 var resetComponents = function () {
     var fullFilename = getStoreFileName();
