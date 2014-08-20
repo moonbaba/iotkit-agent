@@ -18,8 +18,9 @@
         "LEVEL": "info",
         "PATH": "/tmp/"
     },
+    "data_directory": "",
     "gateway_id": null,
-    "default_connector": "mqtt",
+    "default_connector": "rest",
     "connector": {
         "mqtt": {
             "host": "broker.us.enableiot.com",
