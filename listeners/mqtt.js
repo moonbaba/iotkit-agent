@@ -28,6 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 var mqtt = require('mqtt'),
     fs = require('fs'),
     common = require('../lib/common'),
+    utils = require("../lib/utils").init(),
     path = require("path");
 
 /**
@@ -67,11 +68,17 @@ exports.init = function(conf, logger, onMessage, deviceId) {
 
   var metric_topic = conf.connector.mqtt.topic.metric_topic || "server/metric/{accountid}/{gatewayid}";
 
-    var credential = {
-        username: secret.accountId,
+  var credential = {
+        username: '',
         password: secret.deviceToken,
-        keepalive: conf.keepalive
-    };
+        keepalive: conf.keepalive || 60
+  };
+    utils.getDeviceId(function (id) {
+//        logger.info("My OWN Device ID: %s", id);
+        credential.username = id;
+    });
+
+
 
   var mqttServer = mqtt.createServer(function(client) {
 
