@@ -29,6 +29,7 @@ var mqtt = require('mqtt'),
     fs = require('fs'),
     common = require('../lib/common'),
     utils = require("../lib/utils").init(),
+    crypto = require('crypto'),
     path = require("path");
 
 /**
@@ -68,19 +69,23 @@ exports.init = function(conf, logger, onMessage, deviceId) {
 
   var metric_topic = conf.connector.mqtt.topic.metric_topic || "server/metric/{accountid}/{gatewayid}";
 
-  var credential = {
+  var connOptions = {
         username: '',
         password: secret.deviceToken,
-        keepalive: conf.keepalive || 60
+        clientId: ''
   };
     utils.getDeviceId(function (id) {
 //        logger.info("My OWN Device ID: %s", id);
-        credential.username = id;
+        connOptions.username = id;
     });
 
 
 
   var mqttServer = mqtt.createServer(function(client) {
+
+      // store the client objects created for subscription and their topics
+      var self = this;
+      if (!self.clients) self.clients = {};
 
     client.on('connect', function(packet) {
       client.connack({returnCode: 0});
@@ -105,23 +110,34 @@ exports.init = function(conf, logger, onMessage, deviceId) {
             var newclient;
             var topic = packet.subscriptions[0].topic;
 
+            var granted = [];
+            for (var i = 0; i < packet.subscriptions.length; i++) {
+                granted.push(packet.subscriptions[i].qos);
+            }
+
+            // create unique client IDs for each subscription
+            connOptions.clientId = "mqttjs_client_" + crypto.randomBytes(8).toString('hex');
             if(conf.connector.mqtt.secure){
-                newclient = mqtt.createSecureClient(conf.connector.mqtt.port, conf.connector.mqtt.host, credential);
+                self.clients[client.id + '_sub'] = mqtt.createSecureClient(conf.connector.mqtt.port, conf.connector.mqtt.host, connOptions);
             } else {
-                newclient = mqtt.createClient(conf.connector.mqtt.port, conf.connector.mqtt.host, credential);
+                self.clients[client.id + '_sub'] = mqtt.createClient(conf.connector.mqtt.port, conf.connector.mqtt.host, connOptions);
             }
 
             if(topic === '' || topic === 'data'){
-                newclient.subscribe(buildPath(metric_topic, [secret.accountId, deviceId]));
+                self.clients[client.id + '_sub_topic'] = buildPath(metric_topic, [secret.accountId, deviceId]);
+                self.clients[client.id + '_sub'].subscribe(buildPath(metric_topic, [secret.accountId, deviceId]));
                 logger.info('Subscribed to topic:' + buildPath(metric_topic, [secret.accountId, deviceId]));
             } else {
                 // subscribe to another device under the same account
-                newclient.subscribe(buildPath(metric_topic, [secret.accountId, topic]));
+                self.clients[client.id + '_sub_topic'] = buildPath(metric_topic, [secret.accountId, topic]);
+                self.clients[client.id + '_sub'].subscribe(buildPath(metric_topic, [secret.accountId, topic]));
                 logger.info('Subscribed to topic:' + buildPath(metric_topic, [secret.accountId, topic]));
             }
 
-            newclient.on('message', function (topic, message) {
-                logger.info('Received a message on subscribed topic: ' + topic);
+            client.suback({granted: granted, messageId: packet.messageId});
+
+            self.clients[client.id + '_sub'].on('message', function (topic, message) {
+                logger.debug('Received a message on subscribed topic: ' + topic);
                 client.publish({"topic": topic, "payload": message});
             });
         } catch (ex) {
@@ -135,12 +151,43 @@ exports.init = function(conf, logger, onMessage, deviceId) {
     });
 
     client.on('disconnect', function() {
+        // remove subscription topic and subscription client
+        if(self.clients[client.id + '_sub_topic']) {
+            self.clients[client.id + '_sub'].unsubscribe(self.clients[client.id + '_sub_topic'], console.log);
+            delete self.clients[client.id + '_sub_topic'];
+
+            self.clients[client.id + '_sub'].end();
+            delete self.clients[client.id + '_sub'];
+        }
+
       client.stream.end();
     });
 
+      client.on('close', function(err) {
+          // remove subscription topic and subscription client
+          if(self.clients[client.id + '_sub_topic']) {
+              self.clients[client.id + '_sub'].unsubscribe(self.clients[client.id + '_sub_topic'], console.log);
+              delete self.clients[client.id + '_sub_topic'];
+
+              self.clients[client.id + '_sub'].end();
+              delete self.clients[client.id + '_sub'];
+          }
+      });
+
     client.on('error', function(err) {
-      //client.stream.end();
-      logger.error('MQTT Error: ', err);
+        //client.stream.end();
+        logger.error('MQTT Error: ', err);
+
+        // remove subscription topic and subscription client
+        if(self.clients[client.id + '_sub_topic']) {
+            self.clients[client.id + '_sub'].unsubscribe(self.clients[client.id + '_sub_topic'], console.log);
+            delete self.clients[client.id + '_sub_topic'];
+
+            self.clients[client.id + '_sub'].end();
+            delete self.clients[client.id + '_sub'];
+        }
+
+        client.stream.end();
     });
 
   }).listen(mqttServerPort);
