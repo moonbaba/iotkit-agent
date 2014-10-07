@@ -1,34 +1,69 @@
 # iotkit-agent
 
-The IoT Kit Agent abstracts complexities of Cloud connectivity. It allows developers to focus on application development and logic for their devices (sensors, actuators and tags). IoT Kit Agent transparently implements the necessary message format and security during both the device registration and data submission. 
+This project includes two programs:
 
-![Agent Topology](../master/images/agent-topo.png?raw=true)
+###iotkit-admin
+This is a command line "wrapper" for the [REST API](https://github.com/enableiot/iotkit-api/wiki/Api-Home), enabling you to test connectivity, activate a device, register time series and send observations all from the command line.
 
-## Table of Contents
+###iotkit-agent
+This is a "agent" program intended to run as a services. You can send a very simple message, such as:
 
-1. [Running from a Galileo with a pre-installed agent](#1-running-from-a-galileo-with-a-pre-installed-agent)
-2. [Installing using npm](#2-installing-using-npm)
- 
-##1. Running from a Galileo with a pre-installed agent
+```
+{"n": "temp", "v": 26.9}
+```
 
-In case you get a Galileo board with the iotkit-agent pre-installed, you will need to stop the iotkit-agent and then configure it.
-In order to do that, run the command:
+to a UDP socket on port 41234. The agent will add the security token, add a time stamp, convert "temp" to the component (time series) ID, and send a POST over SSL to the cloud server. 
 
-    systemctl stop iotkit-agent
+We have an [Arduino library](https://github.com/enableiot/iotkit-samples/tree/master/arduino) which can send this message to the agent, and you can write your own in other languages.
 
-Once the iotkit-agent is stopped, you can continue with the following steps.
+## Getting Started
 
-####1.1 Set date
+Here is a getting started document which walks you through this material:
 
-If the Galileo board does not have the correct date, run:
+[Getting Started Presentation](../master/doc/gettingStarted.pdf)
 
-    date -s "$(curl -s --head http://google.com | grep ^Date: | sed 's/Date: //g')"
+## Installing
 
-####1.2 Testing the connection with iotkit-dashboard
+If you are participating in a Intel-sponsored hackathon, the agent may be pre-installed on your Galileo or Edison. Try opening a shell on the board and running:
 
-Run the following command to find the enableiot dashboard: 
+```
+# iotkit-admin test
+```
 
-    iotkit-admin test
+If the program is not installed, you can install it following these steps:
+
+```
+# git clone https://github.com/enableiot/iotkit-agent.git
+# cd iotkit-agent
+# npm install
+```
+
+##Which version of the command line?
+
+If the agent has been pre-installed on your Galileo or Edison board, you can run:
+
+```
+# iotkit-admin test
+```
+
+but if it isn't installed, you will need "cd" to the directory where you installed it and run it from the local directory (note the leading ./ and the trailing .js):
+
+```
+# ./iotkit-agent.js test
+```
+
+##Setting up you board
+
+###1 Test the connection to the cloud
+
+
+```
+# iotkit-admin test
+2014-10-05T22:05:12.055Z - info: Connected to broker.us.enableiot.com
+2014-10-05T22:05:12.055Z - info: Environment: PROD
+2014-10-05T22:05:12.055Z - info: Build: 0.10.3
+
+```
 
 *Note*: For more information about iotkit-admin commands, go to section [Notes about "admin" commands](#5-notes-about-admin-commands).
 
