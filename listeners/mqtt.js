@@ -104,42 +104,86 @@ exports.init = function(conf, logger, onMessage, deviceId) {
 
     client.on('subscribe', function(packet) {
         try {
+            if(!self.clients[client.id + '_sub_topic']) self.clients[client.id + '_sub_topic'] = []; // list of subscribed topics
             // create a new client object to the new online broker
             // subscribe
 
-            var newclient;
-            var topic = packet.subscriptions[0].topic;
-
             var granted = [];
+            // we might get multiple topic subscription request
             for (var i = 0; i < packet.subscriptions.length; i++) {
+
+                var subscribe_topic = '';
+                if(packet.subscriptions[i].topic === 'data') {
+                    // data means, subscribe to data published by self device
+                    subscribe_topic = buildPath(metric_topic, [secret.accountId, deviceId]);
+                    self.clients[client.id + '_sub_topic'].push(subscribe_topic);
+                } else {
+                    // topic points to another device under the same account
+                    subscribe_topic = buildPath(metric_topic, [secret.accountId, packet.subscriptions[i].topic]);
+                    self.clients[client.id + '_sub_topic'].push(subscribe_topic);
+                }
+
+                if(self.clients[client.id + '_sub'] === undefined) {
+                    // create unique client IDs for client
+                    connOptions.clientId = "mqttjs_client_" + crypto.randomBytes(8).toString('hex');
+                    if (conf.connector.mqtt.secure) {
+                        self.clients[client.id + '_sub'] = mqtt.createSecureClient(conf.connector.mqtt.port, conf.connector.mqtt.host, connOptions);
+                    } else {
+                        self.clients[client.id + '_sub'] = mqtt.createClient(conf.connector.mqtt.port, conf.connector.mqtt.host, connOptions);
+                    }
+
+                    self.clients[client.id + '_sub'].on('message', function (topic, message) {
+                        client.publish({"topic": topic, "payload": message});
+                    });
+                }
+
+                self.clients[client.id + '_sub'].subscribe(subscribe_topic);
+
                 granted.push(packet.subscriptions[i].qos);
             }
 
-            // create unique client IDs for each subscription
-            connOptions.clientId = "mqttjs_client_" + crypto.randomBytes(8).toString('hex');
-            if(conf.connector.mqtt.secure){
-                self.clients[client.id + '_sub'] = mqtt.createSecureClient(conf.connector.mqtt.port, conf.connector.mqtt.host, connOptions);
-            } else {
-                self.clients[client.id + '_sub'] = mqtt.createClient(conf.connector.mqtt.port, conf.connector.mqtt.host, connOptions);
-            }
-
-            if(topic === '' || topic === 'data'){
-                self.clients[client.id + '_sub_topic'] = buildPath(metric_topic, [secret.accountId, deviceId]);
-                self.clients[client.id + '_sub'].subscribe(buildPath(metric_topic, [secret.accountId, deviceId]));
-                logger.info('Subscribed to topic:' + buildPath(metric_topic, [secret.accountId, deviceId]));
-            } else {
-                // subscribe to another device under the same account
-                self.clients[client.id + '_sub_topic'] = buildPath(metric_topic, [secret.accountId, topic]);
-                self.clients[client.id + '_sub'].subscribe(buildPath(metric_topic, [secret.accountId, topic]));
-                logger.info('Subscribed to topic:' + buildPath(metric_topic, [secret.accountId, topic]));
-            }
-
+            logger.debug('Subscribed to topic(s):' + self.clients[client.id + '_sub_topic']);
             client.suback({granted: granted, messageId: packet.messageId});
+        } catch (ex) {
+            logger.error('Error on message: %s', ex.message);
+            logger.error(ex.stack);
+        }
+    });
 
-            self.clients[client.id + '_sub'].on('message', function (topic, message) {
-                logger.debug('Received a message on subscribed topic: ' + topic);
-                client.publish({"topic": topic, "payload": message});
-            });
+    client.on('unsubscribe', function(packet) {
+        try {
+            for (var i = 0; i < packet.unsubscriptions.length; i++) {
+                var topic = '';
+                if(packet.unsubscriptions[i] === 'data') {
+                    // data means, subscribe to data published by self device
+                    topic = buildPath(metric_topic, [secret.accountId, deviceId]);
+                } else {
+                    // topic points to another device under the same account
+                    topic = buildPath(metric_topic, [secret.accountId, packet.unsubscriptions[i]]);
+                }
+
+                for (var j = 0; j < self.clients[client.id + '_sub_topic'].length; j++) {
+
+                    if(topic === self.clients[client.id + '_sub_topic'][j]) {
+                        // topic found; means we had previously subscribed to this topic
+                        self.clients[client.id + '_sub'].unsubscribe(topic, function() {
+                            // once unsubscribe is successful, remove it from our list
+                            self.clients[client.id + '_sub_topic'].splice(j,1);
+
+                            // once unsubscribed from all the topics; remove the connection
+                            if(self.clients[client.id + '_sub_topic'].length <= 0) {
+                                self.clients[client.id + '_sub'].end();
+                                delete self.clients[client.id + '_sub_topic'];
+                                delete self.clients[client.id + '_sub'];
+                                client.stream.end();
+                            }
+                        });
+
+                        break;
+                    }
+                }
+            }
+            client.unsuback({messageId: packet.messageId});
         } catch (ex) {
             logger.error('Error on message: %s', ex.message);
             logger.error(ex.stack);
