@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 /*
 Copyright (c) 2014, Intel Corporation
 
@@ -28,56 +27,26 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 "use strict";
-var admin= require('../lib/commander'),
-    pkgJson = require('../package.json'),
-    auth = require('../admin/operational'),
-    components = require('../admin/components'),
-    configurator = require('../admin/configurator');
+var endpoint = "127.0.0.1"
+var port     = 41234
 
-admin.version(pkgJson.version);
-/*
- * Add commando as option
- */
-auth.addCommand(admin);
-components.addCommand(admin);
-configurator.addCommand(admin);
-
-admin.command('*')
-     .description('Error message for non valid command')
-     .action(function(){
-        console.log("\'" + admin.args[0] + "\'" +
-            ' is not a valid command.');
-    });
-if(process.argv[2] === 'observation') {
-    if(process.argv[4][0] === '-') {
-        var args = [];
-        var unknown = [];
-        for(var i = 2; i <= 4; i++) {
-            args.push(process.argv[i]);
-        }
-        var parsed = {args: args, unknown: unknown};
-        admin.rawArgs = process.argv;
-        admin.args = args;
-        var result = admin.parseArgs(admin.args, parsed.unknown);
-    }
-    else {
-        admin.parse(process.argv);
-    }
+// Check for valid parameters
+if (process.argv.length != 4) {
+    console.log("Usage: " + process.argv[0] + " " + process.argv[1] + " component_name value");
+    process.exit(1);
 }
-else {
-    admin.parse(process.argv);
-}
-/*
- * Run if the command were specified at parameter
- */
-/*
- * Help and versions also as commands
- */
-if (!admin.args.length || admin.args[0] === 'help') {
-    admin.help();
-}
-admin.command('version')
-    .description('output the version number')
-    .action(admin.version(pkgJson.version));
+    
+// Format JSON message containing name/value pair
+var component = process.argv[2];
+var value     = process.argv[3];
+var data = "{\"n\": \"" + component + "\", \"v\": \"" + value + "\"}";
 
-
+//console.log(data);
+// Send UDP message to local agent
+var dgram = require('dgram');
+var message = new Buffer(data);
+var client = dgram.createSocket("udp4");
+client.send(message, 0, message.length, port, endpoint, function(err, bytes) {
+  client.close();
+  process.exit(0);
+});
