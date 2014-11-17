@@ -25,8 +25,19 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 "use strict";
-var mqtt = require('mqtt');
+var mqtt = require('mqtt'),
+    fs = require('fs'),
+    path = require('path');
+
 var trustedCAs = [__dirname + '/../../certs/AddTrust_External_Root.pem'];
+
+for (var i=0; i < trustedCAs.length; i++) {
+    if (!fs.existsSync(trustedCAs[i])) {
+        var basename = path.basename(trustedCAs[i]);
+        //consider from system folder /usr/share/iotkit-agent/certs
+        trustedCAs[i] = '/usr/share/iotkit-agent/certs/' + basename;
+    }
+}
 
 function Broker(conf, logger) {
     var me = this;
