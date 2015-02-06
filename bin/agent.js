@@ -33,6 +33,10 @@ var utils = require("../lib/utils").init(),
     Message = require('../lib/agent-message'),
     updServer = require('../lib/server/udp'),
     Listener = require("../listeners/"),
+    admin= require('../lib/commander'),
+    pkgJson = require('../package.json'),
+    path = require('path'),
+    fs = require('fs'),
     conf = require('../config');
 
 process.on("uncaughtException", function(err) {
@@ -42,10 +46,25 @@ process.on("uncaughtException", function(err) {
     process.exit(1);
 });
 
+admin.version(pkgJson.version)
+    .option('-C, --config [path]', "Set the config file path", function(userConfDirectory){
+        process.userConfigPath = path.resolve(userConfDirectory , "user.js");
+        if (fs.existsSync(process.userConfigPath)) {
+            logger.info("\'" + process.userConfigPath + "\'" +
+                ' will be used as user config file.');
+            conf = require(process.userConfigPath);
+        }
+        else{
+            logger.error("\'" + process.userConfigPath + "\'" +
+                ' not contains user.js config file.');
+            process.exit(1);
+        }
+    });
 
+admin.parse(process.argv);
 
 utils.getDeviceId(function (id) {
-    var cloud = Cloud.init(conf, logger, id);
+    var cloud = Cloud.init(logger, id);
     cloud.activate(function (status) {
        if (status === 0) {
             var udp = updServer.singleton(conf.listeners.udp_port, logger);

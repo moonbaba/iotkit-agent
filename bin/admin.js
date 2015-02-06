@@ -32,9 +32,25 @@ var admin= require('../lib/commander'),
     pkgJson = require('../package.json'),
     auth = require('../admin/operational'),
     components = require('../admin/components'),
-    configurator = require('../admin/configurator');
+    configurator = require('../admin/configurator'),
+    fs = require('fs'),
+    path = require('path'),
+    logger = require("../lib/logger").init();
 
-admin.version(pkgJson.version);
+admin.version(pkgJson.version)
+    .option('-C, --config [path]', "Set the config file path", function(userConfDirectory){
+        process.userConfigPath = path.resolve(userConfDirectory , "user.js");
+        if (fs.existsSync(process.userConfigPath)) {
+            logger.info("\'" + process.userConfigPath + "\'" +
+                ' will be used as user config file.');
+        }
+        else{
+            logger.error("\'" + process.userConfigPath + "\'" +
+                ' not contains user.js config file.');
+            process.exit(1);
+        }
+    });
+/*
 /*
  * Add commando as option
  */
@@ -49,19 +65,26 @@ admin.command('*')
             ' is not a valid command.');
     });
 if(process.argv[2] === 'observation') {
-    if(process.argv[4][0] === '-') {
-        var args = [];
-        var unknown = [];
-        for(var i = 2; i <= 4; i++) {
-            args.push(process.argv[i]);
+    if(process.argv.length === 5) {
+        if(process.argv[4][0] === '-') {
+            var args = [];
+            var unknown = [];
+            for(var i = 2; i <= 4; i++) {
+                args.push(process.argv[i]);
+            }
+            var parsed = {args: args, unknown: unknown};
+            admin.rawArgs = process.argv;
+            admin.args = args;
+            var result = admin.parseArgs(admin.args, parsed.unknown);
         }
-        var parsed = {args: args, unknown: unknown};
-        admin.rawArgs = process.argv;
-        admin.args = args;
-        var result = admin.parseArgs(admin.args, parsed.unknown);
+        else {
+            admin.parse(process.argv);
+        }
     }
     else {
-        admin.parse(process.argv);
+        console.log("\'" + process.argv[2] + "\'" +
+            ' should contains component_name value.');
+        process.exit(1);
     }
 }
 else {

@@ -22,14 +22,13 @@ Here is a getting started document which walks you through this material:
 
 [Getting Started Presentation](../master/doc/gettingStarted.pdf)
 
-## Installing
-
 If you are participating in a Intel-sponsored hackathon, the agent may be pre-installed on your Galileo or Edison. Try opening a shell on the board and running:
 
 ```
 # iotkit-admin test
 ```
 
+## Installing using git
 If the program is not installed, you can install it following these steps:
 
 ```
@@ -134,7 +133,11 @@ Or, you can set a different Device Id with this command:
 
     ./iotkit-admin.js set-device-id <device_id>
 
-You can also set a different Gateway with this command:
+You can also set a different Device name with this command:
+
+    ./iotkit-admin.js set-device-name <device_name>
+
+Or a different Gateway Id with this command:
 
     ./iotkit-admin.js set-gateway-id <gateway_id>
 
@@ -160,11 +163,71 @@ Yes, you guessed it, run the stop script:
 
     ./stop-agent.sh
 
-##3. Usage
+##3. Upgrade
+
+If you have pre-installed version of iotkit-agent on your Edison board:
+ 1. systemctl stop iotkit-agent
+ 2. Backup old agent located in /usr/lib/node_modules/iotkit-agent where you like
+ 3. If your agent used global config files, backup external files:
+
+  * /etc/iotkit-agent/config.json
+  * /usr/share/iotkit-agent/certs
+  * /usr/share/iotkit-agent/data
+
+ 4. If it was local installation these folders and files are stored locally in config/ certs/ and data/ folders. Backup them.
+ 5. Upgrade iotkit-agent using npm
+  npm install --global iotkit-agent
+ 6. Iotkit-agents from v.1.6.0 use three configuration files:
+
+  * global.json - contains default settings
+  * device.json - contains device settings such as device_token, account_id, sensor_list.
+  * user.js - (optional) allowing user to override any setting in global - like in example file.
+
+  ####If you upgrade from previous versions:
+  
+ 7. Execute node migration.js FOLDER_WITH BACKED_UP_FILES which will compound data from old token.json, sensor-list.json and config.json to device.json.
+ 8. Use user.js example file to create your own settings, such as proxy, default_connector etc.
+ 9. Use set-data-directory to provide location of your device.json and user.js
+
+If your iotkit-agent was installed using git:
+ 1. systemctl stop iotkit-agent
+ 2. Backup old agent located in /usr/lib/node_modules/iotkit-agent where you like
+ 3. If your agent used global config files, backup external files:
+ 
+  * /etc/iotkit-agent/config.json
+  * /usr/share/iotkit-agent/certs
+  * /usr/share/iotkit-agent/data
+    
+ 4. If it was local installation these folders and files are stored locally in config/ certs/ and data/ folders. Backup them.
+ 5. Upgrade iotkit-agent using git
+  From installation directory execute:
+  
+  * git stash
+  * git pull
+  * git stash pop
+    
+  Merge conflicts if occured.
+ 6. Iotkit-agents from v.1.6.0 use three configuration files:
+
+  * global.json - contains default settings
+  * device.json - contains device settings such as device_token, account_id, sensor_list.
+  * user.js - (optional) allowing user to override any setting in global - like in example file.
+  
+  ####If you upgrade from previous versions:
+
+ 7. Execute node migration.js FOLDER_WITH BACKED_UP_FILES which will compound data from old token.json, sensor-list.json and config.json to device.json.
+ 8. Use user.js example file to create your own settings, such as proxy, default_connector etc.
+ 9. Use set-data-directory to provide location of your device.json and user.js
+ 
+ ####Eventually:
+ 10. systemctl start iotkit-agent
+ 11. Check logs in /tmp/agent.log
+	
+##4. Usage
 
 For instructions how to use the iotkit-agent please see the [iotkit-samples repo](https://github.com/enableiot/iotkit-samples).
 
-##4. Test
+##5. Test
 
 The iotkit-agent project uses [gruntjs](http://gruntjs.com/) [mocha](http://visionmedia.github.io/mocha/) as its test framework. 
 To run all tests:
@@ -174,7 +237,7 @@ To run all tests:
     npm install 
     node_modules/.bin/grunt
 
-##5. Notes about "admin" commands
+##6. Notes about "admin" commands
 
 The iotkit-agent provides a set of commands (and basic options) to perform configuration over the device, as well as, some basic actions, like activation, initialization, etc.
 
@@ -186,45 +249,161 @@ The following is the list of commands and options:
 
 Commands:
 
-* `test`                    Tries to reach the server (using the current protocol).
-* `activate <activation_code>` Activates the device.
-* `register <comp_name> <catalogid>` Registers a component in the device. Use this command just for testing purposes.
-* `reset-components`       Clears the component list.
-* `observation <comp_name> <value>` Sends an observation for the device, for the specific component. Use this command just for testing purposes.
-* `update`                 Updates metadata manually
-* `catalog`                Displays the Catalog from the device's account.
-* `components`             Displays components registered for this device.
-* `initialize`             Resets both the token and the component's list.
-* `protocol <protocol>`    Set the protocol to 'mqtt' or 'rest'
-* `host <host> [<port>]`   Sets the cloud hostname for the current protocol.
-* `device-id`              Displays the device id.
-* `set-device-id <id>`     Overrides the device id.
-* `clear-device-id`        Reverts to using the default device id.
-* `save-code <activation_code>` Adds the activation code to the device.
-* `reset-code`             Clears the activation code of the device.
-* `proxy <host> <port>`    Sets proxy For REST protocol.
-* `reset-proxy`            Clears proxy For REST protocol.
-* `set-logger-level <level>` Set the logger level to 'debug', 'info', 'warn', 'error'
+* `test`                                Tries to reach the server (using the current protocol).
+* `activate <activation_code>`          Activates the device.
+* `register <comp_name> <catalogid>`    Registers a component in the device.
+* `reset-components`                    Clears the component list.
+* `observation <comp_name> <value>`     Sends an observation for the device, for the specific component.
+* `catalog`                             Displays the Catalog from the device's account.
+* `components`                          Displays components registered for this device.
+* `initialize`                          Resets both the token and the component's list.
+* `update`                              Send update device request to dashboard
+* `protocol <protocol>`                 Set the protocol to 'mqtt' or 'rest'
+* `host <host> [<port>]`                Sets the cloud hostname for the current protocol.
+* `device-id`                           Displays the device id.
+* `set-device-id <id>`                  Overrides the device id.
+* `clear-device-id`                     Reverts to using the default device id.
+* `save-code <activation_code>`         Adds the activation code to the device.
+* `reset-code`                          Clears the activation code of the device.
+* `proxy <host> <port>`                 Sets proxy For REST protocol.
+* `reset-proxy`                         Clears proxy For REST protocol.
+* `set-logger-level <level>`            Set the logger level to 'debug', 'info', 'warn', 'error'
+* `set-data-directory <path>`           Sets path of directory that contains sensor data.
+* `reset-data-directory`                Resets to default the path of directory that contains sensor data.
+* `move-data-directory <path>`          Change directory where data will be stored
+* `gateway-id                           Displays the geteway id.
+* `set-gateway-id <id>                  Overrides the geteway id.
+* `set-device-name <name>               Change device name
+* `reset-device-name                    Resets to default device name.
+* `set-udp-port <udp_port>              Overrides the port UDP listener binds to
 
-Options:
+  Options:
 
-    -h, --help     output usage information
-    -V, --version  output the version number
+    -h, --help           output usage information
+    -V, --version        output the version number
+    -C, --config [path]  Set the config file path
 
-Commands like 'register' and 'observation' should be used only for testing purposes. 
 
-##6. General notes
+##7. General notes
 
 * The iotkit-agent default protocol is **REST**. To change it to MQTT, use command 'protocol'.
 * The device id is obtained from the MAC Address of the Galileo. Get it with the command 'device-id'.
 * The 'catalog' command shows the list of components associated with the account where the device is active.
 * In order to define the **host**, you don't need to specify the protocol (https/http).
 
-##7. Certificates
+##8. Actuator Request Processing
+Components can be configured to be controlled from the cloud. Actuator requests to these devices are generated using either the [iotkit-dashboard](https://dashboard.us.enableiot.com) or the [REST API](https://github.com/enableiot/iotkit-api/wiki/Control-Device-API). These actuation requests are sent to the device via MQTT protocol so the agent must be configured to uses the MQTT protocol. The agent processes incoming actuation requests, reformats them as JSON messages and sends them to local UDP port 41235. This port is configurable. The user must provide the software to listen to this port, handle requests and perform the desired action based on the parameter value (turn LED on/off, set motor speed, etc.) Example scripts can be found in the [iotkit-samples repo](https://github.com/enableiot/iotkit-samples).
+
+Below is an example of the processed JSON message sent to local UDP port 41235 by the agent.
+```javascript
+{
+	"component": "led1",
+	"command": "LED.v1.0",
+	"argv": [{
+		"name": "LED",
+		"value": "1"
+	}]
+}
+```
+In this example, the request is for component "led1". The "command" field, "LED.v1.0", is a string that was defined in the component type for this component and may or may not have significance to the user. The "LED" parameter name and value can be used to determine what pins to turn on/off.
+
+**Note:** Actuation support requires iotkit-agent version 1.5.2 or later.
+
+##9. Certificates
 
 > Do not use the default certificates in production.
 
 The IoT Kit Agent includes default certificates to provide "out of the box" connectivity. These are fine for public data submissions but should not be used for production deployments. 
+
+## What's new in version 1.6.1
+DP-3463 – Added script for migration from iotkit-agent versions 1.5.6 and below.
+
+## What's new in version 1.6.0
+DP-3122 – Change config loading strategy
+* We introduce new config strategy in this release. Three different configuration files are used: global, user and device. Global config is managed by developers of iotkit-agent. Device config contains all information connected with activated device. User config can be edited manually by user or by iotkit-admin commands. Setting from user configuration file will override the ones from global configuration file.
+
+DP-3115 – Agent should have --config parameter to provide configuration file location
+* Agent can be run with parameter to specify folder where user config file is placed. Other configurations are taken from configs in data folder (which can be moved to other location).
+
+DP-2775 – Create agent command that sets UDP port & address for receiving actuations
+* UDP port and address can be set using iotkit-admin commands.
+
+DP-3182 – Add command to move data directory with user config
+* User can move device and user configuration files to different directory, outside agent folder.
+
+DP-3265 – Add command to set device name using iotkit-admin
+* Added command to set device name, not only ID.
+
+DP-3433 – Prepare example user config
+* Example user config is provided to help users interact with configuration file syntax and available settings.
+ 
+DP-3282 – Make agent reconnect to MQTT
+* Agent try to reconnect to MQTT broker if connection is dropped or lost.
+ 
+DP-2558 – iotkit-agent (and -admin) change the device-id with another MAC
+* Device id is set after activation even if it did not have value before activation.
+
+DP-2961 – Agent accepts remote UDP messages
+* Agent no longer accept UDP messages from remote machines. It listens for observations only locally.
+
+DP-3309 – Agent should send empty strings as credentials if no credentials provided
+* If device is not activated, it sends empty strings as credentials which allow test and activate calls.
+
+DP-3310 – Device is not sending device ID and token
+* Available credentials are used in every call, in both REST and MQTT.
+
+DP-3181 – Agent should not require existence of empty or default configuration files.
+* There are no longer empty configuration files with token and sensor lists which existence was required.
+
+DP-2970 – iotkit-admin crashes if observation command does not provide enough arguments
+* Added additional checking for required arguments before use.
+
+
+
+## What's new in version 1.5.4
+DP-3127 Using only local configuration files, not system ones.
+
+## What's new in version 1.5.2
+DP-2199 – Unable to send observations with value lower than 0
+*    Negative values can be send using command line.
+
+DP-2208 – iotkit-admin.js does not work on Windows
+*    Correct system temporary folder is used in Windows and Linux operating systems.
+
+DP-2282 – Add commands to agent to modify gateway id
+*    Gateway id can be updated separately using command set-gateway-id.
+
+DP-2344 – Timeouts and connection attempts
+*    Time limits for MQTT were increased and number of retries lowered.
+
+DP-2351 – When registering a component with short (<4 characters) name, component is not saved and no error is displayed
+*    Added validation on client side for too short component name during registration.
+
+DP-2521 – Investigate actuation fails
+*    Some problems were found and fixed.
+
+DP-2652 DP-2657 – Sending measurements should not update device every time 
+*    Device is no longer updated when sending observation so less data is sent.
+*    It’s updated when activating device, registering components or manually by executing update command.
+
+DP-1642 – Several iotkit-admin commands do not check arguments
+*    Added message about next required parameter when not provided.
+
+DP-2969 – Sending data by iotkit-agent with value 0 fails
+*    Zero is accepted as measurement value.
+
+DP-3029 – Device activation intermittent failures over REST API
+*    Timeout for REST calls was increased.
+
+DP-1977 – mqtt.createSecureClient does not pass key options
+*    Strict validation of SSL certificates on dashboard and broker enabled by default.
+
+DP-3106 Script for submitting data to local agent using UDP
+*    Script for submitting data to local agent using UDP was added to root folder. It can be used by Windows users who do not have nc program in their OS.
+
+DP-3107 Getting Started guide in pdf has been added
+*    Getting Started guide in pdf format is available in root folder.
+
 
 ## What's new in version 0.8.5
 

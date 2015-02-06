@@ -25,43 +25,33 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-var net = require('net'),
-    JsonSocket = require('json-socket');
 
-exports.init = function(conf, logger, onMessage) {
+var fs = require('fs'),
+    path = require('path'),
+    localConf = path.resolve(fs.realpathSync(process.argv[1]), "../config/global.json");
 
-    var tcpServerPort = conf.tcp_port || 7070;
-    var tcpServerHost = "127.0.0.1";
+if (process.env.NODE_ENV && (process.env.NODE_ENV.toLowerCase().indexOf("local") !== -1)) {
+    localConf = path.resolve("config/global.json");
+}
 
-    function processMessage(data) {
-        try {
-            logger.debug("Message to process:" + JSON.stringify(data));
-            onMessage(data);
-        } catch (ex) {
-            logger.error('TCP Error on message: %s', ex.message);
-            logger.error(ex.stack);
-        }
-    }
+var config = {};
 
-    var server = net.createServer();
-    server.listen(tcpServerPort, tcpServerHost);
+if (fs.existsSync(localConf)) {
+    config = require(localConf);
+} else {
+    console.error("Failed to find config file");
+    process.exit(0);
+}
 
-    server.on('connection', function(socket) {
-        logger.debug('TCP connection from %s:%d',   socket.remoteAddress, socket.remotePort);
-        if(socket.remoteAddress !== "127.0.0.1") {
-                logger.debug("Ignoring remote message from", socket.remoteAddress);
-                return;
-        }
+module.exports = config;
 
-        socket = new JsonSocket(socket);
-        socket.on('message', function(message) {
-            logger.debug("Data arrived: " + JSON.stringify(message));
-            processMessage(message);
-        });
-    });
+/* Example usage:
+ * config.default_connector = "mqtt";
+ * config.connector.rest.timeout = 60000;
+ *
+ * config.connector.rest.proxy.host = "example.com";
+ * config.connector.rest.proxy.port = 1180;
+ *
+ * Please write your changes for config below.
+ */
 
-    logger.info("TCP listener started on port:  ", tcpServerPort);
-
-    return server;
-
-};

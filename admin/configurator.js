@@ -28,63 +28,28 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 var logger = require("../lib/logger").init(),
     common = require('../lib/common'),
     utils = require("../lib/utils").init(),
-    path = require('path');
-
-function readConfig () {
-    var fullFilename = common.getConfigName();
-    return common.readFileToJson(fullFilename);
-}
-
-function writeConfig (data) {
-    var fullFilename = common.getConfigName();
-    common.writeToJson(fullFilename, data);
-}
+    path = require('path'),
+    fs = require('fs');
 
 var configFileKey = {
-    gatewayId : 'gateway_id',
-    deviceId: 'device_id',
     dataDirectory: 'data_directory',
-    activationCode: 'activation_code',
+    userConfigDirectory : 'user_config_directory',
     defaultConnector: 'default_connector',
     loggerLevel: 'logger.LEVEL',
     connectorRestProxyHost: 'connector.rest.proxy.host',
-    connectorRestProxyPort: 'connector.rest.proxy.port'
-};
-
-var saveToConfig = function () {
-    if (arguments.length < 2) {
-        logger.error("Not enough arguments : ", arguments);
-        process.exit(1);
-    }
-    var key = arguments[0];
-    var value = arguments[1];
-    var data = readConfig();
-    var keys = key.split('.');
-    var configSaver = function (data, keys) {
-        var k = keys.splice(0, 1);
-        if (data && (data[k[0]] !== undefined)) {
-            logger.info("Config Key : ", k[0], " value ", value);
-            if (keys.length > 0) {
-                data[k[0]] = configSaver(data[k[0]], keys);
-            } else {
-                data[k[0]] = value;
-                logger.debug("Config Key : ", data);
-            }
-            return data;
-        } else {
-            logger.error("Key : ", key, " not found");
-            return false;
-        }
-    };
-    data = configSaver(data, keys);
-    if (data) {
-        writeConfig(data);
-    }
-    return true;
+    connectorRestProxyPort: 'connector.rest.proxy.port',
+    udpListenerPort: 'listeners.udp_port',
+    activationCode: 'activation_code',
+    accountId : 'account_id',
+    gatewayId : 'gateway_id',
+    deviceId: 'device_id',
+    deviceName: 'device_name',
+    deviceToken: 'device_token',
+    sensorList: 'sensor_list'
 };
 
 var setHostFor = function (host_value, port_value) {
-    var data = readConfig();
+    var data = common.getConfig();
     var proxy;
     if (data) {
        proxy = data["default_connector"];
@@ -102,35 +67,146 @@ var setHostFor = function (host_value, port_value) {
                protocol = "http";
            }
            if(protocol){
-               saveToConfig(protocol_key, protocol);
+               common.saveToUserConfig(protocol_key, protocol);
            }
        }
-       saveToConfig(host_key, host_value);
+        common.saveToUserConfig(host_key, host_value);
        if (port_value) {
         var port_key = 'connector.' + proxy + '.port';
-        saveToConfig(port_key, port_value);
+        common.saveToUserConfig(port_key, port_value);
        }
     }
 };
 
 var setProxy = function (host_proxy, port_proxy) {
-    saveToConfig(configFileKey.connectorRestProxyHost, host_proxy);
-    saveToConfig(configFileKey.connectorRestProxyPort, port_proxy);
+    common.saveToUserConfig(configFileKey.connectorRestProxyHost, host_proxy);
+    common.saveToUserConfig(configFileKey.connectorRestProxyPort, port_proxy);
     logger.info("Set Proxy data");
 };
 var resetProxy = function () {
-    saveToConfig(configFileKey.connectorRestProxyHost, false);
-    saveToConfig(configFileKey.connectorRestProxyPort, false);
+    common.saveToUserConfig(configFileKey.connectorRestProxyHost, false);
+    common.saveToUserConfig(configFileKey.connectorRestProxyPort, false);
     logger.info("Set Proxy data");
 };
 
 var setGatewayId = function(id, cb) {
-    saveToConfig(configFileKey.gatewayId, id);
+    common.saveToDeviceConfig(configFileKey.gatewayId, id);
     cb(id);
+};
+
+var setDeviceId = function(id) {
+    common.saveToDeviceConfig(configFileKey.deviceId, id);
 };
 
 var getGatewayId = function(cb) {
     utils.getGatewayId(configFileKey.gatewayId, cb);
+};
+
+var consts = {
+    PORT_MIN_VALUE: 1025,
+    PORT_MAX_VALUE: 65535
+};
+
+var portValidator = {
+    'Port value must be an integer': function(value) {
+        return !isNaN(value) && value % 1 === 0;
+    },
+    'Port value out of valid range': function(value) {
+        return value >= consts.PORT_MIN_VALUE && value <= consts.PORT_MAX_VALUE;
+    }
+};
+
+var setListenerUdpPort = function(udp_port, onUdpPortSet) {
+    logger.info("Set UDP port");
+
+    var err;
+    for(var key in portValidator) {
+        if(portValidator.hasOwnProperty(key) &&
+            !portValidator[key](udp_port)) {
+            err = key;
+        }
+    }
+
+    if(!err) {
+        common.saveToUserConfig(configFileKey.udpListenerPort, parseInt(udp_port));
+    }
+
+    onUdpPortSet(udp_port, err);
+};
+
+var moveDataDirectory = function(directory, cb) {
+    fs.exists(directory, function (exists) {
+        if (!exists) {
+            fs.mkdir(directory, function (err) {
+                if (err) {
+                    cb(err);
+                    return;
+                }
+            });
+        }
+
+        var err;
+        var config = common.getConfig();
+        var directoryPath = path.resolve(__dirname, "..", config[configFileKey.dataDirectory]);
+
+        var files = fs.readdirSync(directoryPath);
+        try {
+            files.forEach(function (file) {
+                fs.writeFileSync(path.join(directory, file), fs.readFileSync(path.join(directoryPath, file)));
+            });
+
+            if (fs.readdirSync(directoryPath).length !== fs.readdirSync(directory).length) {
+                fs.rmdirSync(directory);
+            }
+            else {
+                directory = path.resolve(directory);
+                common.saveToGlobalConfig(configFileKey.dataDirectory, directory);
+            }
+        } catch (e) {
+            err = e;
+        }
+
+        var pathToDelete = (err) ? directory : directoryPath;
+
+        try {
+            var filesToDelete = fs.readdirSync(pathToDelete);
+            filesToDelete.forEach(function (file) {
+                fs.unlinkSync(path.resolve(pathToDelete, file));
+            });
+
+            if(err) {
+                fs.rmdirSync(directory);
+            }
+        }
+        catch (e) {
+            console.log(e);
+        }
+
+        cb(err);
+    });
+};
+
+var setDataDirectory = function(directory, cb){
+    fs.exists(directory, function (exists) {
+        if(exists){
+            fs.exists(path.resolve(directory, "device.json"), function(configExsits){
+                if(configExsits){
+                    common.saveToGlobalConfig(configFileKey.dataDirectory, path.resolve(directory));
+                }
+                else{
+                    cb(new Error("Directory not contains device.json"));
+                }
+            });
+        }
+        else{
+            cb(new Error("Data directory not exsits"));
+        }
+    });
+};
+
+var setDeviceName = function(name, cb) {
+    common.saveToDeviceConfig(configFileKey.deviceName, name);
+    cb(name);
 };
 
 var loggerLevel = {
@@ -146,7 +222,7 @@ module.exports = {
             .description('Set the protocol to \'mqtt\' or \'rest\'')
             .action(function(protocol){
                 if (protocol === 'mqtt' || protocol === 'rest') {
-                    saveToConfig(configFileKey.defaultConnector, protocol);
+                    common.saveToUserConfig(configFileKey.defaultConnector, protocol);
                     logger.info("protocol set to: " + protocol);
                 } else {
                     logger.error("invalid protocol: %s - please use \'mqtt\' or \'rest\'", protocol);
@@ -172,7 +248,7 @@ module.exports = {
             .command('set-device-id <id>')
             .description('Overrides the device id.')
             .action(function(id) {
-                saveToConfig(configFileKey.deviceId, id);
+                common.saveToDeviceConfig(configFileKey.deviceId, id);
                 logger.info("Device ID set to: %s", id);
             });
 
@@ -180,7 +256,7 @@ module.exports = {
             .command('clear-device-id')
             .description('Reverts to using the default device id.')
             .action(function() {
-                saveToConfig(configFileKey.deviceId, false);
+                common.saveToDeviceConfig(configFileKey.deviceId, false);
                 logger.info("Device ID cleared.");
             });
 
@@ -188,7 +264,7 @@ module.exports = {
             .command('save-code <activation_code>')
             .description('Adds the activation code to the device.')
             .action(function(activation_code) {
-                saveToConfig(configFileKey.activationCode, activation_code);
+                common.saveToDeviceConfig(configFileKey.activationCode, activation_code);
                 logger.info("Activation code saved.");
             });
 
@@ -196,7 +272,7 @@ module.exports = {
             .command('reset-code')
             .description('Clears the activation code of the device.')
             .action(function() {
-                saveToConfig(configFileKey.activationCode, null);
+                common.saveToDeviceConfig(configFileKey.activationCode, null);
                 logger.info("Activation code cleared.");
             });
 
@@ -215,7 +291,7 @@ module.exports = {
             .description('Set the logger level to \'debug\', \'info\', \'warn\', \'error\'')
             .action(function(level) {
                 if (loggerLevel[level]) {
-                    saveToConfig(configFileKey.loggerLevel, level);
+                    common.saveToUserConfig(configFileKey.loggerLevel, level);
                     logger.info("Logger Level set to: %s", level);
                 } else {
                     logger.error("invalid level: %s - please use %s", level,
@@ -226,17 +302,42 @@ module.exports = {
         program
             .command('set-data-directory <path>')
             .description('Sets path of directory that contains sensor data.')
-            .action(function(path) {
-                saveToConfig(configFileKey.dataDirectory, path);
-                logger.info("Data directory changed.");
+            .action(function(directoryPath) {
+                setDataDirectory(directoryPath, function(err){
+                   if(!err){
+                       logger.info("Data directory changed.");
+                   }
+                   else{
+                       logger.error(err.message);
+                   }
+                });
             });
 
         program
             .command('reset-data-directory')
             .description('Resets to default the path of directory that contains sensor data.')
             .action(function() {
-                saveToConfig(configFileKey.dataDirectory, path.join(__dirname, '../data/'));
+                common.saveToGlobalConfig(configFileKey.dataDirectory, "./data/");
                 logger.info("Data directory changed to default.");
+            });
+
+        program
+            .command('move-data-directory <path>')
+            .description('Change directory where data will be stored')
+            .action(function(path){
+                moveDataDirectory (path, function(err){
+                    if(!err) {
+                        logger.info("Data directory moved");
+                    }
+                    else{
+                        if(err.errno === 3){
+                            logger.error("Access error to this directory.");
+                        }
+                        else{
+                            logger.info(err.message);
+                        }
+                    }
+                });
             });
 
         program
@@ -257,7 +358,38 @@ module.exports = {
                 });
             });
 
+        program
+            .command('set-device-name <name>')
+            .description('Change device name')
+            .action(function(name){
+                setDeviceName(name, function(name){
+                    logger.info("Device name set to: %s", name);
+                });
+            });
+
+        program
+            .command('reset-device-name')
+            .description('Resets to default device name.')
+            .action(function() {
+                common.saveToDeviceConfig(configFileKey.deviceName, false);
+                logger.info("Device name changed to default.");
+            });
+
+        program
+            .command('set-udp-port <udp_port>')
+            .description('Overrides the port UDP listener binds to')
+            .action(function(udp_port) {
+                setListenerUdpPort(udp_port, function(udp_port, err){
+                    if(!err) {
+                        logger.info("UDP port is listening on port: %s", udp_port);
+                    }
+                    else {
+                        logger.error(err);
+                    }
+                });
+            });
     },
     getGatewayId: getGatewayId,
-    setGatewayId: setGatewayId
+    setGatewayId: setGatewayId,
+    setDeviceId: setDeviceId
 };

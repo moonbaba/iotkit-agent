@@ -26,21 +26,24 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 "use strict";
+
 var msg = require('../lib/cloud-message'),
     common = require('../lib/common'),
     proxyConnector = require('../lib/proxies').getProxyConnector();
 
-function IoTKitCloud(conf, logger, deviceId, customProxy) {
+function IoTKitCloud(logger, deviceId, customProxy) {
+    var deviceConf = common.getDeviceConfig();
+
     var me = this;
     me.logger = logger;
-    me.filename = conf.token_file || "token.json";
-    me.fullFilename = common.getTokenFileName(me.filename);
-    me.secret = common.readFileToJson(me.fullFilename);
+    me.secret = {'accountId' : deviceConf['account_id'],
+                 'deviceToken' : deviceConf['device_token']};
     me.proxy = customProxy || proxyConnector;
-    me.max_retries = conf.activation_retries || 10;
+    me.max_retries = deviceConf.activation_retries || 10;
     me.deviceId = deviceId;
-    me.gatewayId = conf.gateway_id || deviceId;
-    me.activationCode = conf.activation_code;
+    me.deviceName = deviceConf.device_name;
+    me.gatewayId = deviceConf.gateway_id || deviceId;
+    me.activationCode = deviceConf.activation_code;
     me.logger.debug('Cloud Proxy Created with Cloud Handler ', me.proxy.type);
 }
 IoTKitCloud.prototype.isActivated = function () {
@@ -76,9 +79,10 @@ IoTKitCloud.prototype.activationComplete = function (callback) {
             me.secret.accountId = data.accountId;
             me.activationCompleted = true;
             me.logger.info('Saving device token...');
-            common.writeToJson(me.fullFilename, me.secret);
+            common.saveToDeviceConfig('device_token',me.secret.deviceToken);
+            common.saveToDeviceConfig('account_id',me.secret.accountId);
         }
-        me.proxy.setCredential(me.deviceId, me.secret.deviceToken);
+        me.setDeviceCredentials();
         toCall(data.status);
     };
     return handler;
@@ -123,14 +127,22 @@ IoTKitCloud.prototype.activate = function (code, callback) {
     } else {
         // skip the update since we were already activated
         me.logger.info('Device has already been activated. Updating ...');
-        me.proxy.setCredential(me.deviceId, me.secret.deviceToken);
+        me.setDeviceCredentials();
         complete(0);
     }
+};
+
+IoTKitCloud.prototype.setDeviceCredentials = function() {
+    var me = this;
+    me.proxy.setCredential(me.deviceId, me.secret.deviceToken);
 };
 
 IoTKitCloud.prototype.update = function(callback) {
     var me = this;
     msg.metadataExtended(me.gatewayId , function (doc) {
+        if(me.deviceName){
+            doc.name = me.deviceName;
+        }
         doc.deviceToken = me.secret.deviceToken;
         doc.deviceId = me.deviceId;
         me.logger.info("Updating metadata...");
@@ -223,6 +235,6 @@ IoTKitCloud.prototype.catalog = function (callback) {
     });
 };
 
-exports.init = function(conf, logger, deviceId) {
-    return new IoTKitCloud(conf, logger, deviceId);
+exports.init = function(logger, deviceId) {
+    return new IoTKitCloud(logger, deviceId);
 };

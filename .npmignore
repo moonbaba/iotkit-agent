@@ -1,8 +1,5 @@
 tests/
 images/
-iotkit-agent.service
-*.sh
-LICENSE
 buildscripts/
 *.idea/*
 *.orig
