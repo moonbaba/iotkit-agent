@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2013, Intel Corporation
+Copyright (c) 2014, Intel Corporation
 
 Redistribution and use in source and binary forms, with or without modification,
 are permitted provided that the following conditions are met:
@@ -27,10 +27,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 var express = require("express");
 
-
 exports.init = function(conf, logger, onMessage) {
 
-  var httpServerPort = conf.rest_port_listen || 9090;
+  var httpServerPort = conf.listeners.rest_port || 9090;
   var rest = express();
   rest.configure(function() {
       rest.use(express.favicon());
@@ -45,7 +44,7 @@ exports.init = function(conf, logger, onMessage) {
       logger.debug('REST Payload: ', msg);
       try {
           onMessage(msg);
-          response.send(200);
+          response.send(201);
       } catch (ex) {
           logger.error('REST Error: ', ex.message);
           logger.error(ex.stack);
@@ -54,8 +53,8 @@ exports.init = function(conf, logger, onMessage) {
   });
 
   rest.listen(httpServerPort);
+
   logger.info("REST listener started on port: ", httpServerPort);
   return rest;
-
 };
 
